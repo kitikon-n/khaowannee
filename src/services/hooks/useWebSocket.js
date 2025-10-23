@@ -7,6 +7,8 @@ export const useWebSocket = (url) => {
     const [error, setError] = useState(null);
     const wsRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
+    const reconnectAttemptsRef = useRef(0);
+    const maxReconnectAttempts = 3;
 
     // ฟังก์ชันสำหรับเชื่อมต่อ
     const connect = useCallback(() => {
@@ -17,6 +19,7 @@ export const useWebSocket = (url) => {
                 console.log('✅ WebSocket Connected');
                 setIsConnected(true);
                 setError(null);
+                reconnectAttemptsRef.current = 0; // รีเซ็ต counter เมื่อเชื่อมต่อสำเร็จ
             };
 
             wsRef.current.onmessage = (event) => {
@@ -48,18 +51,29 @@ export const useWebSocket = (url) => {
 
             wsRef.current.onerror = (error) => {
                 console.error('❌ WebSocket error:', error);
-                setError('Connection error');
+                // ไม่แสดง error ถ้ายังไม่เคยเชื่อมต่อสำเร็จ (initial connection)
+                if (reconnectAttemptsRef.current > 0) {
+                    setError('Connection error - retrying...');
+                }
             };
 
-            wsRef.current.onclose = () => {
-                console.log('❌ WebSocket Disconnected');
+            wsRef.current.onclose = (event) => {
+                console.log('❌ WebSocket Disconnected', event.code, event.reason);
                 setIsConnected(false);
 
-                // Auto reconnect หลังจาก 5 วินาที
-                reconnectTimeoutRef.current = setTimeout(() => {
-                    console.log('🔄 Attempting to reconnect...');
-                    connect();
-                }, 5000);
+                // Auto reconnect ถ้ายังไม่เกินจำนวนครั้งที่กำหนด
+                if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+                    reconnectAttemptsRef.current += 1;
+                    const delay = Math.min(1000 * reconnectAttemptsRef.current, 5000); // เพิ่ม delay แบบ exponential แต่ไม่เกิน 5 วินาที
+
+                    console.log(`🔄 Attempting to reconnect... (${reconnectAttemptsRef.current}/${maxReconnectAttempts}) in ${delay}ms`);
+
+                    reconnectTimeoutRef.current = setTimeout(() => {
+                        connect();
+                    }, delay);
+                } else {
+                    setError('ไม่สามารถเชื่อมต่อได้ กรุณาตรวจสอบว่า WebSocket server กำลังรันอยู่');
+                }
             };
         } catch (error) {
             console.error('❌ Connection error:', error);

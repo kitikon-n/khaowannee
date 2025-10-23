@@ -2,11 +2,12 @@ import MainLayout from '../components/layout/MainLayout';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useN8nStream } from '../services/hooks/useN8nStream';
 import { useWebSocket } from '../services/hooks/useWebSocket';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NewsCard } from './NewsCard';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, RefreshCw, Trash2, Send, Wifi, WifiOff, Newspaper } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { showToast } from '../components/share/toast';
 
 export default function NewsPage() {
     // return (
@@ -22,6 +23,9 @@ export default function NewsPage() {
     const [newsData, setNewsData] = useState([]);
     const [currentSymbols, setCurrentSymbols] = useState([]);
     const [hasAttemptedFetch, setHasAttemptedFetch] = useState(false);
+    const previousNewsIds = useRef(new Set());
+    const isInitialLoad = useRef(true); // เช็คว่าเป็นการโหลดครั้งแรกหรือไม่
+    const hasSubscribed = useRef(false); // เช็คว่า subscribe แล้วหรือยัง
 
     const {
         isConnected,
@@ -30,20 +34,86 @@ export default function NewsPage() {
         subscribeToSymbols,
     } = useWebSocket('ws://localhost:8081');
 
-    // Subscribe ทันทีที่เชื่อมต่อสำเร็จ
+
+    // แจ้งเตือนเมื่อเชื่อมต่อสำเร็จ
     useEffect(() => {
         if (isConnected) {
-            const defaultSymbols = ['BNB', 'PTT'];
-            subscribeToSymbols(defaultSymbols);
-            setHasAttemptedFetch(true);
+            showToast.success('เชื่อมต่อสำเร็จ! กำลังรอข่าวใหม่...');
         }
-    }, [isConnected, subscribeToSymbols]);
+    }, [isConnected]);
+
+    // แจ้งเตือนเมื่อมี error
+    useEffect(() => {
+        if (error) {
+            showToast.error(error);
+        }
+    }, [error]);
+
+    // กำหนดสถานะการแสดงผล
+    const isLoading = isConnected && !hasAttemptedFetch;
+    const isNoNews = isConnected && hasAttemptedFetch && newsData.length === 0;
+
+
+    // Subscribe ทันทีที่เชื่อมต่อสำเร็จ (แต่ทำครั้งเดียว)
+    useEffect(() => {
+        if (isConnected && !hasSubscribed.current) {
+            const defaultSymbols = ['BNB', 'PTT'];
+            const success = subscribeToSymbols(defaultSymbols);
+            if (success) {
+                hasSubscribed.current = true;
+                setHasAttemptedFetch(true);
+            }
+        }
+
+        // Reset flag เมื่อ disconnect
+        if (!isConnected) {
+            hasSubscribed.current = false;
+            setHasAttemptedFetch(false);
+        }
+    }, [isConnected]);
 
     // อัพเดทข่าวเมื่อมีข้อมูลใหม่
     useEffect(() => {
         if (lastMessage?.type === 'data' && lastMessage?.data) {
             if (lastMessage?.data?.length > 0) {
-                // ทำอะไรบางอย่างกับข้อมูล
+
+                // ถ้าเป็นครั้งแรก ให้เก็บ IDs และไม่แจ้งเตือน
+                if (isInitialLoad.current) {
+                    lastMessage.data.forEach(news => {
+                        previousNewsIds.current.add(news.id);
+                    });
+                    isInitialLoad.current = false;
+                    setNewsData(lastMessage.data);
+                    return;
+                }
+
+                // หาข่าวใหม่ที่ยังไม่เคยแสดง (เฉพาะรอบที่ 2 เป็นต้นไป)
+                const newNews = lastMessage.data.filter(news => {
+                    return !previousNewsIds.current.has(news.id);
+                });
+
+                // ถ้ามีข่าวใหม่ ให้แจ้งเตือน
+                if (newNews.length > 0) {
+                    if (newNews.length === 1) {
+                        showToast.news(newNews[0]);
+                    } else {
+                        // ถ้ามีหลายข่าว แสดงทีละข่าว
+                        showToast.multipleNews(newNews.slice(0, 3)); // จำกัดแค่ 3 ข่าวแรก
+
+                        // ถ้ามีมากกว่า 3 แสดง summary
+                        if (newNews.length > 3) {
+                            setTimeout(() => {
+                                showToast.success(`มีข่าวใหม่ทั้งหมด ${newNews.length} ข่าว`);
+                            }, 1000);
+                        }
+                    }
+                }
+
+                // อัพเดท Set ของ IDs
+                lastMessage.data.forEach(news => {
+                    previousNewsIds.current.add(news.id);
+                });
+
                 setNewsData(lastMessage.data || []);
                 setCurrentSymbols(lastMessage.symbols || []);
             } else {
@@ -54,10 +124,6 @@ export default function NewsPage() {
             setNewsData([]);
         }
     }, [lastMessage]);
-
-    // กำหนดสถานะการแสดงผล
-    const isLoading = isConnected && !hasAttemptedFetch;
-    const isNoNews = isConnected && hasAttemptedFetch && newsData.length === 0;
 
     return (
         <MainLayout activeMenu="news">
