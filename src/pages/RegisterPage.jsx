@@ -5,11 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Eye, EyeOff, User, Mail, Lock } from 'lucide-react';
 import { showToast } from '../components/share/toast';
+import { useAuth } from '../contexts/AuthContext';
 
 function RegisterPage() {
   const navigate = useNavigate();
+  const { register } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -47,19 +50,32 @@ function RegisterPage() {
     return newErrors;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const newErrors = validateRegister();
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    // TODO: เรียก API Register ที่นี่
-    console.log('Register submitted:', formData);
-    showToast.success('สมัครสมาชิกสำเร็จ!');
-    // นำทางกลับไปหน้า login หลังสมัครสำเร็จ
-    navigate('/login');
+    setIsLoading(true);
+
+    try {
+      const result = await register(formData.username, formData.email, formData.password);
+
+      if (result.success) {
+        showToast.success('สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ');
+        setTimeout(() => {
+          navigate('/login');
+        }, 1000);
+      } else {
+        showToast.error(result.error || 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
+      }
+    } catch (error) {
+      showToast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -178,9 +194,10 @@ function RegisterPage() {
               {/* Submit Button */}
               <Button
                 onClick={handleSubmit}
-                className="w-full bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-800 hover:to-amber-700 dark:from-amber-600 dark:to-amber-700 dark:hover:from-amber-700 dark:hover:to-amber-800 text-white font-semibold py-6 shadow-md"
+                disabled={isLoading}
+                className="w-full bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-800 hover:to-amber-700 dark:from-amber-600 dark:to-amber-700 dark:hover:from-amber-700 dark:hover:to-amber-800 text-white font-semibold py-6 shadow-md disabled:opacity-50"
               >
-                สมัครสมาชิก
+                {isLoading ? 'กำลังสมัครสมาชิก...' : 'สมัครสมาชิก'}
               </Button>
 
               {/* Login Link */}

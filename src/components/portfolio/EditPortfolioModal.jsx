@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup } from '@/components/ui/select';
 import { showToast } from '../share/toast';
 import { portfolioValidation, validatePortfolioForm } from './validation';
 import { portfolioService } from '@/services/portfolioService';
 
-export default function AddPortfolioModal({ onAdd }) {
-    const [isOpen, setIsOpen] = useState(false);
+export default function EditPortfolioModal({ isOpen, onClose, portfolio, onUpdate }) {
     const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
@@ -19,17 +17,17 @@ export default function AddPortfolioModal({ onAdd }) {
     });
     const [errors, setErrors] = useState({});
 
-    // Reset form and errors when modal closes
+    // Initialize form data when portfolio changes
     useEffect(() => {
-        if (!isOpen) {
-            // Use setTimeout to ensure modal animation completes
-            const timer = setTimeout(() => {
-                setFormData({ name: '', asset: '', description: '' });
-                setErrors({});
-            }, 100);
-            return () => clearTimeout(timer);
+        if (portfolio) {
+            setFormData({
+                name: portfolio.name || '',
+                asset: portfolio.asset || '',
+                description: portfolio.description || ''
+            });
+            setErrors({});
         }
-    }, [isOpen]);
+    }, [portfolio]);
 
     const assetGroups = {
         asset: [
@@ -37,7 +35,7 @@ export default function AddPortfolioModal({ onAdd }) {
             { value: '02', text: 'Crypto' },
             { value: '03', text: 'Thai stock' }
         ]
-    }
+    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -71,7 +69,6 @@ export default function AddPortfolioModal({ onAdd }) {
 
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
-            // Show first error in toast
             const firstError = Object.values(validationErrors)[0];
             showToast.error(firstError);
             return;
@@ -80,35 +77,34 @@ export default function AddPortfolioModal({ onAdd }) {
         setIsLoading(true);
 
         try {
-            // Call API to create portfolio
-            const result = await portfolioService.createPortfolio(formData);
+            // Call API to update portfolio
+            const result = await portfolioService.updatePortfolio(portfolio.id, {
+                name: formData.name,
+                description: formData.description,
+                asset: formData.asset
+            });
 
             if (result.success) {
-                showToast.success('เพิ่ม Portfolio สำเร็จ!');
-                onAdd(result.data);  // Pass the created portfolio data to parent
-                setIsOpen(false);
+                showToast.success('อัพเดท Portfolio สำเร็จ!');
+                onUpdate(result.data);
+                onClose();
             }
         } catch (error) {
-            showToast.error(error.message || 'เกิดข้อผิดพลาดในการสร้าง Portfolio');
+            showToast.error(error.message || 'เกิดข้อผิดพลาดในการอัพเดท Portfolio');
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white shadow-md">
-                    <Plus className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">เพิ่ม Portfolio</span>
-                    <span className="sm:hidden">เพิ่ม</span>
-                </Button>
-            </DialogTrigger>
+        <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="bg-white dark:bg-stone-900 max-w-[95vw] sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle className="text-xl sm:text-2xl text-stone-800 dark:text-stone-100">เพิ่ม Portfolio ใหม่</DialogTitle>
+                    <DialogTitle className="text-xl sm:text-2xl text-stone-800 dark:text-stone-100">
+                        แก้ไข Portfolio
+                    </DialogTitle>
                     <DialogDescription className="text-stone-600 dark:text-stone-400">
-                        กรอกข้อมูล Port ที่ต้องการเพิ่ม
+                        แก้ไขข้อมูล Portfolio ของคุณ
                     </DialogDescription>
                 </DialogHeader>
 
@@ -128,27 +124,14 @@ export default function AddPortfolioModal({ onAdd }) {
 
                     <div>
                         <label className="text-sm font-medium text-stone-700 dark:text-stone-300">Asset</label>
-                        {/* <Input
-                            name="asset"
-                            placeholder="เช่น BTC"
-                            value={formData.asset}
-                            onChange={handleInputChange}
-                            className="mt-1"
-                        /> */}
                         <Select
                             value={formData.asset}
-                            onValueChange={(value) => {
-                                setFormData({ ...formData, asset: value });
-                                if (errors.asset) {
-                                    setErrors(prev => ({ ...prev, asset: '' }));
-                                }
-                            }}
+                            disabled={true}
                         >
-                            <SelectTrigger className={`bg-white dark:bg-stone-800 dark:text-stone-100 dark:border-stone-700 w-full ${errors.asset ? 'border-red-500 dark:border-red-500' : ''}`}>
+                            <SelectTrigger className="bg-stone-100 dark:bg-stone-800 dark:text-stone-100 dark:border-stone-700 w-full opacity-60 cursor-not-allowed">
                                 <SelectValue placeholder="Select Asset" />
                             </SelectTrigger>
                             <SelectContent className="max-h-[300px] dark:bg-stone-800 dark:border-stone-700">
-                                {/* Forex Group */}
                                 <SelectGroup>
                                     {assetGroups.asset.map((item) => (
                                         <SelectItem key={item.value} value={item.value}>
@@ -158,26 +141,16 @@ export default function AddPortfolioModal({ onAdd }) {
                                 </SelectGroup>
                             </SelectContent>
                         </Select>
-                        {errors.asset && <p className="text-xs text-red-500 mt-1">{errors.asset}</p>}
+                        {/* <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">ประเภท Asset ไม่สามารถเปลี่ยนแปลงได้หลังสร้าง Portfolio</p> */}
                     </div>
 
                     <div>
-                        {/* <label className="text-sm font-medium text-stone-700">Description</label> */}
                         <div className="flex items-center justify-between">
                             <label className="text-sm font-medium text-stone-700 dark:text-stone-300">Description</label>
                             <span className="text-xs text-gray-500 dark:text-stone-400">
                                 {formData.description.length}/1200
                             </span>
                         </div>
-                        {/* <Input
-                            name="description"
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            value={formData.description}
-                            onChange={handleInputChange}
-                            className="mt-1"
-                        /> */}
                         <Textarea
                             value={formData.description}
                             onChange={(e) => {
@@ -190,19 +163,28 @@ export default function AddPortfolioModal({ onAdd }) {
                             }}
                             onBlur={() => handleBlur('description')}
                             className={`resize-none bg-white dark:bg-stone-800 dark:text-stone-100 dark:border-stone-700 ${errors.description ? 'border-red-500 dark:border-red-500' : ''}`}
-                            // rows={4}
                             placeholder="Some comments"
                         />
                         {errors.description && <p className="text-xs text-red-500 mt-1">{errors.description}</p>}
                     </div>
 
-                    <Button
-                        onClick={handleSubmit}
-                        disabled={isLoading}
-                        className="w-full bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white disabled:opacity-50"
-                    >
-                        {isLoading ? 'กำลังเพิ่ม Portfolio...' : 'เพิ่ม Portfolio'}
-                    </Button>
+                    <div className="flex gap-2 pt-2">
+                        <Button
+                            variant="outline"
+                            onClick={onClose}
+                            disabled={isLoading}
+                            className="flex-1 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800"
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            onClick={handleSubmit}
+                            disabled={isLoading}
+                            className="flex-1 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white disabled:opacity-50"
+                        >
+                            {isLoading ? 'กำลังบันทึก...' : 'บันทึก'}
+                        </Button>
+                    </div>
                 </div>
             </DialogContent>
         </Dialog>

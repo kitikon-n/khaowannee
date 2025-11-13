@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Khaowannee** is a cryptocurrency portfolio management application built with React 19, Vite, and Tailwind CSS 4. The app allows users to register, login, and manage their crypto portfolios with a modern UI using shadcn/ui components.
+**Khaowannee** is a cryptocurrency portfolio management application built with React 19, Vite, and Tailwind CSS 4. The app features JWT-based authentication, real-time WebSocket news feeds, and comprehensive portfolio tracking with shadcn/ui components. All dates use Thai format (dd/mm/yyyy) and UI text is in Thai language.
 
 ## Development Commands
 ```bash
@@ -23,113 +23,231 @@ npm run lint
 
 ## Architecture Overview
 
-### Routing & Authentication Flow
-- **Router**: React Router v7 with browser routing
-- **Auth Flow**: Login → Register → Portfolio Dashboard
-- **Protected Routes**: All portfolio/news pages require authentication
-- **Auth State**: Managed via React Context (`src/contexts/AuthContext.jsx`)
-- **Persistence**: User data stored in localStorage (excludes passwords)
+### Backend & API Integration
+- **Backend**: FastAPI REST API at `http://localhost:8000`
+- **HTTP Client**: Axios with interceptors for automatic token management
+- **WebSocket**: Real-time news at `ws://localhost:8081`
+- **Proxy**: Vite dev server proxies `/api/*` requests to `http://localhost:8000` with path rewrite
+- **Authentication**: JWT tokens (`access_token`, `refresh_token`) stored in localStorage
+- **Axios Interceptors**:
+  - Request: Auto-attaches `Authorization: Bearer {token}` header
+  - Response: Auto-redirects to `/login` on 401 errors (except login endpoint)
 
-### API Integration
-- **Backend**: n8n workflow at `https://n8n.rerankmeister.com`
-- **Proxy**: Vite dev server proxies `/api/*` requests to backend
-- **Auth Service**: `src/services/authService.js` handles login/register API calls
-- **Login Endpoint**: `/api/webhook/c7b56cff-ff4f-45ee-b9a9-5c41a92fbc98`
-- **Register Endpoint**: `https://localhost:5001/api/register` (Note: hardcoded localhost)
+### API Endpoints
+
+**Authentication**:
+- `POST /user/register` - User registration
+- `POST /user/login` - User login (returns access_token, refresh_token)
+- `GET /user/me` - Get current user info
+
+**Portfolios**:
+- `GET /portfolios` - List all user portfolios
+- `POST /portfolios` - Create new portfolio
+- `GET /portfolios/{id}` - Get single portfolio
+- `PUT /portfolios/{id}` - Update portfolio
+- `DELETE /portfolios/{id}` - Delete portfolio
+- `GET /portfolios/{id}/detail` - Get detailed portfolio with holdings and transactions
+
+**Cryptocurrencies**:
+- `GET /cryptocurrencies/` - Get cryptocurrencies filtered by asset_type (01=Forex, 02=Crypto, 03=Thai stock)
+- `GET /cryptocurrencies/{id}/price` - Get current price for cryptocurrency
+
+**Transactions**:
+- `POST /transactions/` - Create new transaction
+
+### Routing Structure
+- `/` - Redirects to `/portfolios`
+- `/login` - LoginPage (public)
+- `/register` - RegisterPage (public)
+- `/portfolios` - CryptoPortfolioDashboard (protected)
+- `/portfolios/:id` - PortfolioDetailPage (protected)
+- `/news` - NewsPage with real-time WebSocket feed (protected)
+
+**Protected Routes**: All portfolio and news pages require authentication via ProtectedRoute component. Shows loading spinner during auth check, redirects to `/login` if not authenticated.
+
+### State Management
+**React Context - No Redux/Zustand**
+
+**AuthContext** (`src/contexts/AuthContext.jsx`):
+- Provides: `user`, `isAuthenticated`, `loading`, `login()`, `register()`, `logout()`, `checkAuth()`
+- Handles: JWT token management, user data persistence in localStorage
+- Auto-fetches user data from `/user/me` on app start if token exists
+- Import: `import { useAuth } from '@/contexts/AuthContext'`
+
+**ThemeContext** (`src/contexts/ThemeContext.jsx`):
+- Provides: `theme`, `toggleTheme()`, `isDark`
+- Handles: Dark/light mode with system preference detection
+- Persists theme preference to localStorage
+- Import: `import { useTheme } from '@/contexts/ThemeContext'`
 
 ### Component Architecture
 
-#### Layout Structure
-1. **MainLayout** (`src/components/layout/MainLayout.jsx`)
-    - Main application shell with sidebar
-    - Responsive mobile/desktop views
-    - Handles navigation between portfolios/news
+**Pages** (`src/pages/`):
+- `LoginPage.jsx` - Login with validation (min 6 char password)
+- `RegisterPage.jsx` - User registration
+- `CryptoPortfolioDashboard.jsx` - Main portfolios grid
+- `PortfolioDetailPage.jsx` - Detail view with tabs (Overview, Holdings, Transactions, Analysis)
+- `NewsPage.jsx` - Real-time crypto news with WebSocket
+- `NewsCard.jsx` - Individual news card
 
-2. **Sidebar** (`src/components/layout/Sidebar.jsx`)
-    - Navigation menu (Portfolios, News, Logout)
-    - Mobile overlay + slide-out drawer
-    - Desktop persistent sidebar
+**Portfolio Components** (`src/components/portfolio/`):
+- `PortfolioList.jsx` - Portfolio grid with create card
+- `PortfolioCard.jsx` - Individual portfolio with stats
+- `AddPortfolioModal.jsx` - Create portfolio (name, asset type, description)
+- `EditPortfolioModal.jsx` - Edit portfolio (asset field disabled)
+- `AddTransactionModal.jsx` - Add transaction with auto-price fetch
+- `HoldingsTable.jsx` - Shows holdings (Symbol, Qty, Avg price, Invested, Unrealized gain)
+- `TransactionsTable.jsx` - Shows transactions with edit/delete actions
+- `validation.js` - Form validation utilities
 
-#### UI Component System
-- **Framework**: shadcn/ui (New York style variant)
-- **Base Color**: Stone
-- **Path Alias**: `@/` → `./src/`
-- **Location**: `src/components/ui/`
-- **Styling Utility**: `cn()` function in `src/lib/utils.js` (combines clsx + tailwind-merge)
-- **Available Components**: button, input, label, card, dialog, textarea, select, tabs, table, alert
-
-#### Feature Components
-
-**Portfolio Components** (`src/components/portfolio/`)
-- `PortfolioList.jsx` - Displays grid of portfolio cards
-- `PortfolioCard.jsx` - Individual crypto portfolio card
-- `CreatePortfolioCard.jsx` - Add new portfolio card
-- `AddPortfolioModal.jsx` - Modal for adding portfolios
-- `CreatePortfolioModal.jsx` - Alternative creation modal
-
-**Auth Components** (`src/components/auth/`)
-- `LoginForm.jsx` - User login form
-- `RegisterForm.jsx` - User registration form
+**Auth Components** (`src/components/auth/`):
+- `ProtectedRoute.jsx` - Route guard for authenticated pages
+- `LoginForm.jsx`, `RegisterForm.jsx` - Auth forms
 - `AuthLayout.jsx` - Wrapper for auth pages
-- `validation.js` - Form validation logic
 
-**Shared Components** (`src/components/share/`)
-- `ToastNotification.jsx` + `toast.js` - Toast notification system using react-hot-toast
-- `InputField.jsx` - Reusable form input
+**Layout Components** (`src/components/layout/`):
+- `MainLayout.jsx` - Main app shell with sidebar and logout dialog
+- `Sidebar.jsx` - Navigation with mobile drawer
+- `ThemeToggle.jsx` - Dark/light mode switcher
+
+**Shared Components** (`src/components/share/`):
+- `ToastNotification.jsx` + `toast.js` - Toast system using react-hot-toast
+- `NewsToast.jsx` - Custom toast for news notifications
 - `DayNightBackground.jsx` - Animated gradient background
-- `constants.js` - Shared constants (e.g., GRADIENT_BG)
 
-### State Management
-- **No Redux/Zustand**: Uses React Context + useState
-- **Auth Context**: Global user state, login/logout functions
-- **Local State**: Component-level state for portfolios, forms, modals
-- **Data Fetching**: Native fetch API (no React Query/SWR)
+**UI Components** (`src/components/ui/`):
+- shadcn/ui components: button, input, label, card, dialog, textarea, select, tabs, table, alert, badge
+- `date-input.jsx` - Custom component for Thai dd/mm/yyyy format
 
-### Styling System
-- **Tailwind CSS 4**: Using new Vite plugin (`@tailwindcss/vite`)
-- **Config Location**: `src/tailwind.config.js`
-- **CSS Variables**: Enabled for shadcn/ui theming
-- **Custom Animations**: tw-animate-css package installed
-- **Design Tokens**: Stone color palette, amber accents for portfolios
+## Key Technical Patterns
+
+### Service Layer Pattern
+All API calls centralized in `src/services/`:
+
+**authService.js** & **portfolioService.js**:
+- Shared axios instance with `baseURL: 'http://localhost:8000'`
+- Request interceptor: Auto-attach `Authorization: Bearer {token}` from localStorage
+- Response interceptor: Handle 401 errors with auto-redirect to `/login` (except login endpoint)
+- All methods return `{ success: true, data: ... }` or throw errors with Thai messages
+
+### JWT Authentication Flow
+1. User logs in → API returns `access_token` and `refresh_token`
+2. Tokens stored in localStorage along with user object
+3. Axios interceptor automatically adds `Bearer {access_token}` to all requests
+4. On 401 error: Clear tokens and redirect to login
+5. ProtectedRoute checks auth before rendering pages
+
+### Date Handling (Thai Format)
+**Date Utils** (`src/lib/dateUtils.js`):
+- `formatDate(date)` - Convert to dd/mm/yyyy display
+- `toInputDateFormat(date)` - Convert to yyyy-mm-dd for inputs
+- `getTodayInputFormat()` - Today in yyyy-mm-dd
+- `formatRelativeDate(date)` - "Today", "Yesterday", or dd/mm/yyyy
+
+**Custom DateInput Component** (`src/components/ui/date-input.jsx`):
+- Accepts and displays dd/mm/yyyy format
+- Auto-formats with slashes as user types
+- Validates date on blur
+- Converts internally to ISO format (yyyy-mm-dd) for API
+
+### Form Validation Pattern
+**Validation System** (`src/components/portfolio/validation.js`):
+- `validatePortfolioForm(formData)` - Returns errors object
+- `validateTransactionForm(formData)` - Returns errors object
+- Field-level validators: `portfolioValidation.portfolioName()`, `transactionValidation.price()`, etc.
+- All messages in Thai
+- Real-time error clearing on input change
+- Validation on blur and before submit
+
+### Modal Pattern
+Consistent pattern across all modals:
+1. Dialog state controlled by parent via `isOpen` prop
+2. Form state managed internally with `useState`
+3. Validation on submit and field-level (onBlur)
+4. API call with loading state
+5. Success: callback to parent → close modal → reset form
+6. Error: show toast → keep modal open
+7. Form reset on close with setTimeout for animation
+
+### Table Pattern
+**HoldingsTable** and **TransactionsTable**:
+- Responsive: Desktop table + mobile cards
+- Desktop: Full table with sortable columns
+- Mobile: Card layout with key metrics
+- Actions column with dropdown menu (edit/delete)
+- Color-coded gains/losses (green/red)
+- Empty states and loading states
+
+### WebSocket Integration
+**useWebSocket Hook** (`src/services/hooks/useWebSocket.js`):
+- Auto-connect on mount to `ws://localhost:8081`
+- Auto-reconnect with exponential backoff (max 3 attempts)
+- Message queue management
+- API: `isConnected`, `messages`, `lastMessage`, `error`, `subscribeToSymbols()`, `sendMessage()`
+
+**NewsPage Usage**:
+- Connects on mount
+- Subscribes to default symbols ['BNB', 'PTT']
+- Tracks seen news IDs to only show NEW items
+- Displays custom toast for new news
+- Scrollable feed with auto-scroll
+
+### Toast Notification System
+**Toast Utils** (`src/components/share/toast.js`):
+- `showToast.success(message)` - Success notification
+- `showToast.error(message)` - Error notification
+- `showToast.loading(message)` - Loading (returns ID for dismiss)
+- `showToast.promise(promise, { loading, success, error })` - Promise-based
+- `showToast.news(newsObject, options)` - Special news toast with NewsToast component
+- `showToast.multipleNews(newsArray, options)` - Staggered news toasts (300ms delay)
+- All Thai language by default
 
 ## Important Implementation Notes
 
 ### Path Aliases
 - `@/` is aliased to `./src/` in `vite.config.js`
-- Always use `@/` imports for cleaner code: `import { Button } from '@/components/ui/button'`
+- Always use `@/` imports: `import { Button } from '@/components/ui/button'`
 
-### API Proxy Configuration
-The Vite dev server is configured to:
-- Proxy `/api` requests to `https://n8n.rerankmeister.com`
-- Strip `/api` prefix before forwarding
-- Allow ngrok and localhost hosts
+### Tailwind CSS 4 Setup
+- **Version**: Tailwind CSS 4 using `@tailwindcss/vite` plugin
+- **Import**: `@import "tailwindcss"` in `index.css` (not classic config file)
+- **Config**: `src/tailwind.config.js` (not root)
+- **Dark Mode**: Class-based with `@custom-variant dark` syntax
+- **Colors**: Stone palette (neutrals) + Amber accents (portfolios/actions)
+- **Font**: Kodchasan from Google Fonts (Thai-friendly)
+- **Utils**: `cn()` function in `src/lib/utils.js` (clsx + tailwind-merge)
 
-### Authentication Context
-The `AuthContext` provides:
-- `user` - Current user object (without password)
-- `isAuthenticated` - Boolean auth status
-- `login(userData)` - Sets user and persists to localStorage
-- `logout()` - Clears user state and localStorage
+### shadcn/ui Configuration
+- **Style**: New York variant
+- **Base Color**: Stone
+- **Theme**: CSS variables with oklch color space
+- **Available Components**: button, input, label, card, dialog, textarea, select, tabs, table, alert, badge, date-input (custom)
+- **Import Pattern**: `import { Button } from '@/components/ui/button'`
 
-Import: `import { useAuth } from '@/contexts/AuthContext'`
+### Component Naming Conventions
+- **Pages**: PascalCase (LoginPage.jsx, PortfolioDetailPage.jsx)
+- **UI Components**: lowercase (button.jsx, card.jsx, date-input.jsx)
+- **Feature Components**: PascalCase (PortfolioCard.jsx, HoldingsTable.jsx)
 
-### Toast Notifications
-Use the centralized toast system:
-```javascript
-import { showToast } from '@/components/share/toast';
-showToast.success('Success message');
-showToast.error('Error message');
-```
+### Portfolio Asset Types
+- `01` - Forex
+- `02` - Crypto
+- `03` - Thai stock
 
-### Component File Naming
-- Page components: PascalCase (e.g., `LoginPage.jsx`, `CryptoPortfolioDashboard.jsx`)
-- UI components: lowercase filenames (e.g., `button.jsx`, `card.jsx`)
-- Feature components: PascalCase (e.g., `PortfolioCard.jsx`, `AddPortfolioModal.jsx`)
+Asset type cannot be changed after portfolio creation (field disabled in EditPortfolioModal).
 
-## Known Issues & TODOs
+### Transaction Data Flow
+1. User opens AddTransactionModal
+2. Select symbol → auto-fetch price from `/cryptocurrencies/{id}/price`
+3. Fill quantity, commission, notes
+4. Calculate total: `(price * quantity) ± commission` (+ for buy, - for sell)
+5. Submit → POST `/transactions/` with portfolio_id, cryptocurrency_id, transaction_type, etc.
+6. Reload parent portfolio detail to show updated holdings
 
-1. **Register API Endpoint**: Currently points to `https://localhost:5001/api/register` which is hardcoded and likely incorrect (see `src/services/authService.js:12`)
-2. **Logout in MainLayout**: TODO comment at `src/components/layout/MainLayout.jsx:17-19` to properly integrate AuthContext logout
-3. **Commented Code**: `App.jsx` contains large section of commented-out legacy code (lines 1-67)
-4. **Portfolio State**: Currently using mock data; needs backend integration for persistence
-5. **News Page**: Basic page exists but implementation incomplete
+### Holdings Calculations
+- **Avg Price**: `total_invested / quantity`
+- **Current Value**: `current_price * quantity`
+- **Unrealized Gain**: `current_value - total_invested`
+- **Unrealized Gain %**: `(unrealized_gain / total_invested) * 100`
+
+Note: `total_invested` is NOT a field in portfolio creation—it's calculated from transactions on the backend.

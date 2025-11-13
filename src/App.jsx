@@ -73,6 +73,7 @@ import CryptoPortfolioDashboard from './pages/CryptoPortfolioDashboard';
 import PortfolioDetailPage from './pages/PortfolioDetailPage';
 import NewsPage from './pages/NewsPage';
 import AuthProvider from './contexts/AuthContext';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 import { Toaster } from 'react-hot-toast';
 
 function App() {
@@ -80,12 +81,33 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<Navigate to="/portfolios" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/portfolios" element={<CryptoPortfolioDashboard />} />
-          <Route path="/portfolios/:id" element={<PortfolioDetailPage />} />
-          <Route path="/news" element={<NewsPage />} />
+          <Route
+            path="/portfolios"
+            element={
+              <ProtectedRoute>
+                <CryptoPortfolioDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/portfolios/:id"
+            element={
+              <ProtectedRoute>
+                <PortfolioDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/news"
+            element={
+              <ProtectedRoute>
+                <NewsPage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-center" />

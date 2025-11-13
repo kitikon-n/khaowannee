@@ -5,17 +5,17 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
-  server: {proxy: {
+  server: {
+    proxy: {
       '/api': {
-        target: 'https://n8n.rerankmeister.com',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }
     },
     allowedHosts: [
-      '.ngrok-free.app', // Or your specific Ngrok subdomain, e.g., 'your-subdomain.ngrok-free.app'
-      'localhost', // Keep localhost if you also access it directly
-      'n8n.rerankmeister.com'
+      'localhost',
+      '127.0.0.1'
     ],
   },
   plugins: [

@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Eye, EyeOff, User, Lock } from 'lucide-react';
-import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
 import { showToast } from '../components/share/toast';
 
@@ -29,7 +28,11 @@ function LoginPage() {
     const validateLogin = () => {
         const newErrors = {};
         if (!formData.username.trim()) newErrors.username = 'กรุณากรอก Username';
-        if (!formData.password) newErrors.password = 'กรุณากรอกรหัสผ่าน';
+        if (!formData.password) {
+            newErrors.password = 'กรุณากรอกรหัสผ่าน'
+        } else if (formData.password.length < 6) {
+            newErrors.password = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+        };
         return newErrors;
     };
 
@@ -46,41 +49,15 @@ function LoginPage() {
         setIsLoading(true);
 
         try {
-            // const response = await fetch('https://localhost:5001/api/login', {
-            //     method: 'POST',
-            //     headers: {
-            //         'Content-Type': 'application/json',
-            //     },
-            //     body: JSON.stringify({
-            //         username: formData.username,
-            //         password: formData.password
-            //     })
-            // });
+            const result = await login(formData.username, formData.password);
 
-            const response = await authService.login(formData.username, formData.password);
-            console.log(response);
-
-            if (response?.user_id) {
-                login(response); // เก็บข้อมูล user
+            if (result.success) {
                 showToast.success('เข้าสู่ระบบสำเร็จ!');
-                navigate('/portfolios'); // หรือหน้าที่ต้องการ
+                navigate('/portfolios');
             } else {
-                showToast.error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+                showToast.error(result.error || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
             }
-
-            // const data = await response.json();
-
-            // if (response.ok) {
-            //     // เก็บ token ถ้ามี
-            //     // localStorage.setItem('token', data.token);
-            //     console.log('1111111111111111', data);
-
-
-            // } else {
-            //     setErrors({ submit: data.message || 'เข้าสู่ระบบไม่สำเร็จ' });
-            // }
         } catch (error) {
-            // setErrors({ submit: 'เกิดข้อผิดพลาดในการเชื่อมต่อ' });
             showToast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
         } finally {
             setIsLoading(false);

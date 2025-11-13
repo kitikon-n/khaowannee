@@ -1,107 +1,167 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import MainLayout from '../components/layout/MainLayout';
 import AddTransactionModal from '../components/portfolio/AddTransactionModal';
+import EditPortfolioModal from '../components/portfolio/EditPortfolioModal';
+import EditTransactionModal from '../components/portfolio/EditTransactionModal';
+import DeleteConfirmDialog from '../components/share/DeleteConfirmDialog';
 import HoldingsTable from '../components/portfolio/HoldingsTable';
+import TransactionsTable from '../components/portfolio/TransactionsTable';
+import OverviewList from '../components/portfolio/OverviewList';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ArrowLeft } from 'lucide-react';
+import { ChevronDown, ArrowLeft, Pencil } from 'lucide-react';
 import { showToast } from '../components/share/toast';
+import { portfolioService } from '@/services/portfolioService';
 
 export default function PortfolioDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState('holdings');
+    const [activeTab, setActiveTab] = useState('overview');
+    const [isLoading, setIsLoading] = useState(true);
+    const [portfolioData, setPortfolioData] = useState(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isEditTransactionModalOpen, setIsEditTransactionModalOpen] = useState(false);
+    const [selectedTransaction, setSelectedTransaction] = useState(null);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [transactionToDelete, setTransactionToDelete] = useState(null);
 
-    const handleAddTransaction = (transaction) => {
-        // คำนวณค่าต่างๆ
-        const totalCost = (transaction.price * transaction.quantity) + transaction.commission;
-        const currentValue = transaction.price * transaction.quantity; // ในการใช้งานจริงควรดึงราคาปัจจุบันจาก API
-        const unrealizedGain = currentValue - totalCost;
+    // Load portfolio detail on mount
+    useEffect(() => {
+        loadPortfolioDetail();
+    }, [id]);
 
-        // เช็คว่ามี holding อยู่แล้วหรือไม่
-        const existingIndex = holdings.findIndex(h => h.symbol === transaction.symbol);
-
-        if (existingIndex >= 0) {
-            // ถ้ามีอยู่แล้ว อัพเดทข้อมูล
-            const updated = [...holdings];
-            const existing = updated[existingIndex];
-
-            if (transaction.side === 'buy') {
-                const newQuantity = existing.quantity + transaction.quantity;
-                const newInvested = existing.invested + totalCost;
-                updated[existingIndex] = {
-                    ...existing,
-                    quantity: newQuantity,
-                    avgPrice: newInvested / newQuantity,
-                    invested: newInvested,
-                    unrealizedGain: (transaction.price * newQuantity) - newInvested,
-                    totalGain: (transaction.price * newQuantity) - newInvested
-                };
-            } else {
-                // sell
-                updated[existingIndex] = {
-                    ...existing,
-                    quantity: existing.quantity - transaction.quantity
-                };
+    const loadPortfolioDetail = async () => {
+        try {
+            const result = await portfolioService.getPortfolioDetail(id);
+            if (result.success) {
+                console.log(result.data);
+                
+                setPortfolioData(result.data);
             }
+        } catch (error) {
+            showToast.error('ไม่สามารถโหลดข้อมูล Portfolio ได้');
+            navigate('/portfolios');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-            setHoldings(updated);
-        } else {
-            // ถ้ายังไม่มี เพิ่มใหม่
-            const newHolding = {
-                id: Date.now(),
-                symbol: transaction.symbol,
-                name: transaction.symbol,
-                allocation: 0, // คำนวณใหม่ภายหลัง
-                quantity: transaction.quantity,
-                avgPrice: transaction.price,
-                invested: totalCost,
-                unrealizedGain: unrealizedGain,
-                dailyGain: 0,
-                totalDividend: 0,
-                totalGain: unrealizedGain
+    const handleAddTransaction = async (transaction) => {
+        // Transaction already created by AddTransactionModal
+        // Just reload portfolio data to show updated information
+        await loadPortfolioDetail();
+    };
+
+    const handleUpdatePortfolio = (updatedData) => {
+        // Update portfolio data with new data from API
+        setPortfolioData(updatedData);
+    };
+
+    const handleEditTransaction = (transaction) => {
+        setSelectedTransaction(transaction);
+        setIsEditTransactionModalOpen(true);
+    };
+
+    const handleUpdateTransaction = async (updatedTransaction) => {
+        // Transaction already updated by EditTransactionModal
+        // Just reload portfolio data to show updated information
+        await loadPortfolioDetail();
+    };
+
+    const handleDeleteTransaction = (transaction) => {
+        setTransactionToDelete(transaction);
+        setIsDeleteDialogOpen(true);
+    };
+
+    const confirmDeleteTransaction = async () => {
+        if (!transactionToDelete) return;
+
+        try {
+            const result = await portfolioService.deleteTransaction(transactionToDelete.id);
+            if (result.success) {
+                showToast.success('ลบ Transaction สำเร็จ!');
+                await loadPortfolioDetail();
+            }
+        } catch (error) {
+            showToast.error(error.message || 'เกิดข้อผิดพลาดในการลบ Transaction');
+        }
+    };
+
+    // Show loading state
+    if (isLoading) {
+        return (
+            <MainLayout activeMenu="portfolios">
+                <div className="flex items-center justify-center min-h-screen">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto"></div>
+                        <p className="mt-4 text-stone-600 dark:text-stone-400">กำลังโหลดข้อมูล...</p>
+                    </div>
+                </div>
+            </MainLayout>
+        );
+    }
+
+    // If no data, show error
+    if (!portfolioData) {
+        return (
+            <MainLayout activeMenu="portfolios">
+                <div className="flex items-center justify-center min-h-screen">
+                    <div className="text-center">
+                        <p className="text-stone-600 dark:text-stone-400">ไม่พบข้อมูล Portfolio</p>
+                        <Button onClick={() => navigate('/portfolios')} className="mt-4">
+                            กลับไปหน้า Portfolios
+                        </Button>
+                    </div>
+                </div>
+            </MainLayout>
+        );
+    }
+
+    // Extract data from API response
+    const holdings = portfolioData.portfolio_holdings || [];
+    const transactions = portfolioData.transactions || [];
+    const analysis = portfolioData.analysis || [];
+    const overview = portfolioData.overview || [];
+
+    // Calculate Profit/Loss from overview data
+    const calculateProfitLossFromOverview = () => {
+        if (overview.length === 0) {
+            return {
+                totalInvested: 0,
+                currentValue: 0,
+                profitLoss: 0,
+                profitLossPercentage: 0
             };
-
-            setHoldings([...holdings, newHolding]);
         }
 
-        showToast.success('เพิ่ม Transaction สำเร็จ!');
+        const totalInvested = overview.reduce((sum, asset) => sum + (asset.total_invested || 0), 0);
+        const currentValue = overview.reduce((sum, asset) => sum + (asset.current_value || 0), 0);
+        const profitLoss = overview.reduce((sum, asset) => sum + (asset.unrealizedGain || 0), 0);
+        const profitLossPercentage = totalInvested > 0 ? (profitLoss / totalInvested) * 100 : 0;
+
+        return {
+            totalInvested,
+            currentValue,
+            profitLoss,
+            profitLossPercentage
+        };
     };
 
-    // Mock data - ในการใช้งานจริงจะดึงจาก API ตาม id
+    const portfolioStats = calculateProfitLossFromOverview();
+
     const portfolio = {
-        id: id,
-        name: 'Bitcoin',
-        symbol: 'BTC',
-        value: 22500.46,
-        cash: -4.39,
-        unrealizedGain: 2340.46,
-        unrealizedGainPercent: 10.52,
-        lastDayGain: -255.11,
-        lastDayGainPercent: -2.24,
-        realizedGain: 0.00,
-        totalDividend: 0.00,
-        totalGain: 2340.46,
-        totalGainPercent: 10.52,
-        annualizedYield: 879.29
+        id: portfolioData.id,
+        name: portfolioData.name,
+        description: portfolioData.description,
+        asset: portfolioData.asset,
+        assetName: portfolioData.asset_name,
+        value: portfolioStats.currentValue,
+        totalInvested: portfolioStats.totalInvested,
+        profitLoss: portfolioStats.profitLoss,
+        profitLossPercentage: portfolioStats.profitLossPercentage,
+        createdDate: portfolioData.created_date
     };
-
-    const [holdings, setHoldings] = useState([
-        {
-            id: 1,
-            symbol: 'BTC',
-            name: 'Bitcoin',
-            allocation: 100.00,
-            quantity: 0.5,
-            avgPrice: 45000,
-            invested: 22500,
-            unrealizedGain: 2340.46,
-            dailyGain: -255.11,
-            totalDividend: 0.00,
-            totalGain: 2340.46
-        }
-    ]);
 
     const tabs = [
         { id: 'overview', label: 'Overview' },
@@ -112,7 +172,7 @@ export default function PortfolioDetailPage() {
 
     return (
         <MainLayout activeMenu="portfolios">
-            <div className="max-w-7xl mx-auto">
+            <div className="max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
                 {/* Back Button - Mobile */}
                 <Button
                     variant="ghost"
@@ -125,73 +185,107 @@ export default function PortfolioDetailPage() {
 
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                    <div>
-                        <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                        <div className="flex items-center gap-3">
                             <h1 className="text-2xl sm:text-3xl font-bold text-stone-800 dark:text-stone-100">
-                                My portfolio {portfolio.name}
+                                {portfolio.name}
                             </h1>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setIsEditModalOpen(true)}
+                                className="h-8 w-8 text-stone-600 dark:text-stone-400 hover:text-amber-600 dark:hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                            >
+                                <Pencil className="h-4 w-4" />
+                            </Button>
                         </div>
-                        <p className="text-sm text-green-600 dark:text-green-400 font-medium mt-1">you success ✓</p>
+                        <p className="text-sm text-stone-600 dark:text-stone-400 mt-1">
+                            {portfolio.assetName} • {portfolio.description}
+                        </p>
                     </div>
-                    <AddTransactionModal portfolioName={portfolio.name} portfolioSymbol={portfolio.symbol} onAdd={handleAddTransaction} />
+                    <AddTransactionModal portfolioId={id} portfolioName={portfolio.name} portfolioAsset={portfolio.asset} onAdd={handleAddTransaction} />
                 </div>
+
+                {/* Edit Portfolio Modal */}
+                <EditPortfolioModal
+                    isOpen={isEditModalOpen}
+                    onClose={() => setIsEditModalOpen(false)}
+                    portfolio={portfolio}
+                    onUpdate={handleUpdatePortfolio}
+                />
+
+                {/* Edit Transaction Modal */}
+                <EditTransactionModal
+                    isOpen={isEditTransactionModalOpen}
+                    onClose={() => setIsEditTransactionModalOpen(false)}
+                    transaction={selectedTransaction}
+                    onUpdate={handleUpdateTransaction}
+                />
+
+                {/* Delete Confirm Dialog */}
+                <DeleteConfirmDialog
+                    isOpen={isDeleteDialogOpen}
+                    onClose={() => setIsDeleteDialogOpen(false)}
+                    onConfirm={confirmDeleteTransaction}
+                    title="ลบ Transaction"
+                    description={transactionToDelete ? `คุณต้องการลบ transaction นี้ใช่หรือไม่?\n${transactionToDelete.cryptocurrency_symbol} - ${transactionToDelete.transaction_type} ${transactionToDelete.quantity}` : ''}
+                />
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     {/* Portfolio Value */}
-                    <Card className="border-stone-200 dark:border-stone-700 dark:bg-stone-800">
+                    {/* <Card className="border-stone-200 dark:border-stone-700 dark:bg-stone-800">
                         <CardContent className="p-4">
                             <p className="text-sm text-stone-600 dark:text-stone-400 mb-1">Portfolio value</p>
                             <p className="text-2xl font-bold text-stone-800 dark:text-stone-100">
                                 ${portfolio.value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 <span className="text-xs text-stone-500 dark:text-stone-400 font-normal ml-1">USD</span>
                             </p>
-                            <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">Cash {portfolio.cash.toFixed(2)}</p>
-                        </CardContent>
-                    </Card>
-
-                    {/* Unrealized Gain */}
-                    <Card className="border-stone-200 dark:border-stone-700 dark:bg-stone-800">
-                        <CardContent className="p-4">
-                            <p className="text-sm text-stone-600 dark:text-stone-400 mb-1">Unrealized gain</p>
-                            <div className="flex items-baseline gap-2">
-                                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                                    +${portfolio.unrealizedGain.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                </p>
-                                <span className="text-sm text-green-600 dark:text-green-400 font-semibold">+{portfolio.unrealizedGainPercent}%</span>
-                            </div>
-                            <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                                Last day {portfolio.lastDayGain.toFixed(2)} {portfolio.lastDayGainPercent}%
+                            <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
+                                Total Invested: ${portfolio.totalInvested.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </p>
                         </CardContent>
-                    </Card>
+                    </Card> */}
 
-                    {/* Realized Gain */}
+                    {/* Profit/Loss */}
                     <Card className="border-stone-200 dark:border-stone-700 dark:bg-stone-800">
                         <CardContent className="p-4">
-                            <p className="text-sm text-stone-600 dark:text-stone-400 mb-1">Realized gain</p>
+                            <p className="text-sm text-stone-600 dark:text-stone-400 mb-1">Profit/Loss</p>
+                            <div className="flex items-baseline gap-2">
+                                <p className={`text-2xl font-bold ${portfolio.profitLoss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    {portfolio.profitLoss >= 0 ? '+' : ''}${portfolio.profitLoss.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </p>
+                                <span className={`text-sm font-semibold ${portfolio.profitLoss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    {portfolio.profitLoss >= 0 ? '+' : ''}{Number(portfolio.profitLossPercentage).toFixed(2)}%
+                                </span>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Holdings Count */}
+                    <Card className="border-stone-200 dark:border-stone-700 dark:bg-stone-800">
+                        <CardContent className="p-4">
+                            <p className="text-sm text-stone-600 dark:text-stone-400 mb-1">Holdings</p>
                             <p className="text-2xl font-bold text-stone-800 dark:text-stone-100">
-                                ${portfolio.realizedGain.toFixed(2)}
-                                <span className="text-xs text-stone-500 dark:text-stone-400 font-normal ml-1">USD</span>
+                                {holdings.length}
+                                <span className="text-xs text-stone-500 dark:text-stone-400 font-normal ml-1">assets</span>
                             </p>
                             <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
-                                Total dividends {portfolio.totalDividend.toFixed(2)} USD
+                                Active positions
                             </p>
                         </CardContent>
                     </Card>
 
-                    {/* Total Gain */}
+                    {/* Transactions Count */}
                     <Card className="border-stone-200 dark:border-stone-700 dark:bg-stone-800">
                         <CardContent className="p-4">
-                            <p className="text-sm text-stone-600 dark:text-stone-400 mb-1">Total gain</p>
-                            <div className="flex items-baseline gap-2">
-                                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                                    +${portfolio.totalGain.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                </p>
-                                <span className="text-sm text-green-600 dark:text-green-400 font-semibold">+{portfolio.totalGainPercent}%</span>
-                            </div>
+                            <p className="text-sm text-stone-600 dark:text-stone-400 mb-1">Transactions</p>
+                            <p className="text-2xl font-bold text-stone-800 dark:text-stone-100">
+                                {transactions.length}
+                                <span className="text-xs text-stone-500 dark:text-stone-400 font-normal ml-1">total</span>
+                            </p>
                             <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
-                                Annualized yield {portfolio.annualizedYield}%
+                                All-time trades
                             </p>
                         </CardContent>
                     </Card>
@@ -219,9 +313,7 @@ export default function PortfolioDetailPage() {
                 <div>
                     {activeTab === 'overview' && (
                         <Card className="border-stone-200 dark:border-stone-700 dark:bg-stone-800">
-                            <CardContent className="p-6">
-                                <p className="text-stone-600 dark:text-stone-400">Overview content coming soon...</p>
-                            </CardContent>
+                            <OverviewList overview={overview} />
                         </Card>
                     )}
 
@@ -233,11 +325,14 @@ export default function PortfolioDetailPage() {
                     )}
 
                     {activeTab === 'transactions' && (
-                        <Card className="border-stone-200 dark:border-stone-700 dark:bg-stone-800">
-                            <CardContent className="p-6">
-                                <p className="text-stone-600 dark:text-stone-400">Transactions content coming soon...</p>
-                            </CardContent>
-                        </Card>
+                        <div>
+                            <h2 className="text-xl font-bold text-stone-800 dark:text-stone-100 mb-4">Transaction history</h2>
+                            <TransactionsTable
+                                transactions={transactions}
+                                onEdit={handleEditTransaction}
+                                onDelete={handleDeleteTransaction}
+                            />
+                        </div>
                     )}
 
                     {activeTab === 'analysis' && (

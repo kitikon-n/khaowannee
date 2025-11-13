@@ -86,8 +86,9 @@ export const validatePortfolioForm = (formData) => {
     const assetError = portfolioValidation.asset(formData.asset);
     if (assetError) errors.asset = assetError;
 
-    const amountError = portfolioValidation.amount(formData.total_invested);
-    if (amountError) errors.total_invested = amountError;
+    // total_invested is optional now (removed from form)
+    // const amountError = portfolioValidation.amount(formData.total_invested);
+    // if (amountError) errors.total_invested = amountError;
 
     const descriptionError = portfolioValidation.description(formData.description);
     if (descriptionError) errors.description = descriptionError;

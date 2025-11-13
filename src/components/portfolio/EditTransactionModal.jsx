@@ -1,100 +1,56 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/date-input';
-import { Plus, ChevronDown } from 'lucide-react';
 import { showToast } from '../share/toast';
 import { transactionValidation, validateTransactionForm } from './validation';
 import { portfolioService } from '@/services/portfolioService';
-import { getTodayInputFormat } from '@/lib/dateUtils';
+import { toInputDateFormat } from '@/lib/dateUtils';
 
-export default function AddTransactionModal({ portfolioId, portfolioName, portfolioAsset, onAdd }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [availableSymbols, setAvailableSymbols] = useState([]);
-    const [isLoadingSymbols, setIsLoadingSymbols] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+export default function EditTransactionModal({ isOpen, onClose, transaction, onUpdate }) {
     const [formData, setFormData] = useState({
         side: 'buy',
         symbolId: '',
-        date: getTodayInputFormat(),
+        symbolLabel: '',
+        date: '',
         price: '',
         quantity: '1',
         commission: '0',
         notes: ''
     });
     const [errors, setErrors] = useState({});
- 
-    // Load cryptocurrencies when portfolioAsset changes
-    useEffect(() => {
-        if (portfolioAsset) {
-            loadCryptocurrencies();
-        }
-    }, [portfolioAsset]);
+    const [isLoading, setIsLoading] = useState(false);
 
-    // Reset form and errors when modal closes
-    useEffect(() => {
-        if (!isOpen) {
-            // Use setTimeout to ensure modal animation completes
-            const timer = setTimeout(() => {
-                setFormData({
-                    side: 'buy',
-                    symbolId: '',
-                    date: getTodayInputFormat(),
-                    price: '',
-                    quantity: '1',
-                    commission: '0',
-                    notes: ''
-                });
-                setErrors({});
-            }, 100);
-            return () => clearTimeout(timer);
-        }
-    }, [isOpen, availableSymbols]);
-
-    const loadCryptocurrencies = async () => {
-        setIsLoadingSymbols(true);
-        try {
-            const result = await portfolioService.getCryptocurrencies(portfolioAsset);
-            if (result.success) {
-                // Map API response to symbol format
-                const symbols = result.data.map(crypto => ({
-                    value: crypto.id,
-                    label: `${crypto.name} (${crypto.symbol})`,
-                    icon: crypto.symbol.charAt(0),
-                    id: crypto.id,
-                    symbol: crypto.symbol
-                }));
-                setAvailableSymbols(symbols);
-            }
-        } catch (error) {
-            showToast.error('ไม่สามารถโหลดรายการ Cryptocurrency ได้');
-            setAvailableSymbols([]);
-        } finally {
-            setIsLoadingSymbols(false);
-        }
+    // Helper function to remove unnecessary decimal zeros
+    const formatNumberInput = (value) => {
+        const num = parseFloat(value);
+        if (isNaN(num)) return '';
+        // Remove trailing zeros and unnecessary decimal point
+        return num.toString();
     };
 
-    const loadCryptocurrencyPrice = async (cryptocurrencyId) => {
-        try {
-            const result = await portfolioService.getCryptocurrencyPrice(cryptocurrencyId);
-            if (result.success && result.data.close_price) {
-                setFormData(prev => ({ ...prev, price: result.data.close_price.toString() }));
-            }
-        } catch (error) {
-            // Silently fail - user can manually enter price
-            console.error('Failed to load cryptocurrency price:', error);
+    // Initialize form data when transaction changes
+    useEffect(() => {
+        if (transaction && isOpen) {
+            setFormData({
+                side: transaction.transaction_type,
+                symbolId: transaction.cryptocurrency_id,
+                symbolLabel: `${transaction.cryptocurrency_name} (${transaction.cryptocurrency_symbol})`,
+                symbolIcon: transaction.cryptocurrency_symbol?.charAt(0),
+                date: toInputDateFormat(transaction.transaction_date),
+                price: formatNumberInput(transaction.price_per_unit),
+                quantity: formatNumberInput(transaction.quantity),
+                commission: formatNumberInput(transaction.fee),
+                notes: transaction.notes || ''
+            });
+            setErrors({});
         }
-    };
+    }, [transaction, isOpen]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-
-        // If symbol changed, load the new price
-        if (name === 'symbolId') {
-            loadCryptocurrencyPrice(value);
-        }
 
         // Clear error for this field when user starts typing
         if (errors[name]) {
@@ -146,7 +102,7 @@ export default function AddTransactionModal({ portfolioId, portfolioName, portfo
             return;
         }
 
-        setIsSubmitting(true);
+        setIsLoading(true);
         try {
             const price = parseFloat(formData.price);
             const quantity = parseFloat(formData.quantity);
@@ -154,9 +110,7 @@ export default function AddTransactionModal({ portfolioId, portfolioName, portfo
 
             // Prepare transaction data for API
             const transactionData = {
-                portfolio_id: portfolioId,
-                cryptocurrency_id: formData.symbolId,
-                transaction_type: formData.side,
+                transaction_id: transaction.id,
                 quantity: quantity,
                 price_per_unit: price,
                 total_amount: price * quantity,
@@ -165,61 +119,55 @@ export default function AddTransactionModal({ portfolioId, portfolioName, portfo
                 notes: formData.notes
             };
 
-            // Call API to create transaction
-            const result = await portfolioService.createTransaction(transactionData);
+            // Call API to update transaction
+            const result = await portfolioService.updateTransaction(transactionData);
 
             if (result.success) {
-                showToast.success('เพิ่ม Transaction สำเร็จ!');
+                showToast.success('แก้ไข Transaction สำเร็จ!');
 
-                // Call callback function with new transaction
-                if (onAdd) {
-                    onAdd(result.data);
+                // Call callback function with updated transaction
+                if (onUpdate) {
+                    onUpdate(result.data);
                 }
 
-                // Close modal (reset will be handled by useEffect)
-                setIsOpen(false);
+                // Close modal
+                onClose();
             }
         } catch (error) {
-            showToast.error(error.message || 'เกิดข้อผิดพลาดในการเพิ่ม Transaction');
+            showToast.error(error.message || 'เกิดข้อผิดพลาดในการแก้ไข Transaction');
         } finally {
-            setIsSubmitting(false);
+            setIsLoading(false);
         }
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white shadow-md">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add transaction
-                </Button>
-            </DialogTrigger>
+        <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="bg-white dark:bg-stone-900 max-w-[95vw] sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle className="text-xl font-semibold text-stone-900 dark:text-stone-100">Add transaction</DialogTitle>
+                    <DialogTitle className="text-xl font-semibold text-stone-900 dark:text-stone-100">Edit transaction</DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-4 mt-2">
-                    {/* Side */}
+                    {/* Side (Disabled) */}
                     <div>
                         <label className="text-sm font-medium text-stone-700 dark:text-stone-300 mb-2 block">Side</label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-2 opacity-60 cursor-not-allowed">
                             <button
                                 type="button"
-                                onClick={() => setFormData(prev => ({ ...prev, side: 'sell' }))}
-                                className={`py-2.5 px-4 rounded-md font-medium transition-colors ${formData.side === 'sell'
+                                disabled
+                                className={`py-2.5 px-4 rounded-md font-medium ${formData.side === 'sell'
                                     ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border-2 border-red-200 dark:border-red-700'
-                                    : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-300 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-700'
+                                    : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-300 dark:border-stone-700'
                                     }`}
                             >
                                 Sell
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setFormData(prev => ({ ...prev, side: 'buy' }))}
-                                className={`py-2.5 px-4 rounded-md font-medium transition-colors ${formData.side === 'buy'
+                                disabled
+                                className={`py-2.5 px-4 rounded-md font-medium ${formData.side === 'buy'
                                     ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-2 border-blue-200 dark:border-blue-700'
-                                    : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-300 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-700'
+                                    : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-300 dark:border-stone-700'
                                     }`}
                             >
                                 Buy
@@ -227,39 +175,16 @@ export default function AddTransactionModal({ portfolioId, portfolioName, portfo
                         </div>
                     </div>
 
-                    {/* Symbol */}
+                    {/* Symbol (Disabled) */}
                     <div>
                         <label className="text-sm font-medium text-stone-700 dark:text-stone-300 mb-2 block">Symbol</label>
                         <div className="relative">
-                            {isLoadingSymbols ? (
-                                <div className="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-700 rounded-md bg-stone-50 dark:bg-stone-800 text-stone-500 dark:text-stone-400">
-                                    กำลังโหลด...
-                                </div>
-                            ) : availableSymbols.length === 0 ? (
-                                <div className="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-700 rounded-md bg-stone-50 dark:bg-stone-800 text-stone-500 dark:text-stone-400">
-                                    ไม่พบข้อมูล Cryptocurrency
-                                </div>
-                            ) : (
-                                <>
-                                    <select
-                                        name="symbolId"
-                                        value={formData.symbolId}
-                                        onChange={handleInputChange}
-                                        className="w-full px-3 py-2.5 border border-stone-300 dark:border-stone-700 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-600 appearance-none bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100"
-                                    >
-                                        <option value="" disabled>เลือก Symbol</option>
-                                        {availableSymbols.map((symbol) => (
-                                            <option key={symbol.value} value={symbol.value}>
-                                                {symbol.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg">
-                                        {availableSymbols.find(s => s.value === formData.symbolId)?.icon}
-                                    </span>
-                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-500 dark:text-stone-400 pointer-events-none" />
-                                </>
-                            )}
+                            <div className="w-full px-3 py-2.5 pl-10 border border-stone-300 dark:border-stone-700 rounded-md bg-stone-50 dark:bg-stone-800 text-stone-600 dark:text-stone-400 cursor-not-allowed opacity-60">
+                                {formData.symbolLabel}
+                            </div>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-stone-600 dark:text-stone-400">
+                                {formData.symbolIcon}
+                            </span>
                         </div>
                     </div>
 
@@ -367,8 +292,8 @@ export default function AddTransactionModal({ portfolioId, portfolioName, portfo
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() => setIsOpen(false)}
-                            disabled={isSubmitting}
+                            onClick={onClose}
+                            disabled={isLoading}
                             className="flex-1 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800"
                         >
                             Cancel
@@ -376,10 +301,10 @@ export default function AddTransactionModal({ portfolioId, portfolioName, portfo
                         <Button
                             type="button"
                             onClick={handleSubmit}
-                            disabled={isSubmitting}
+                            disabled={isLoading}
                             className="flex-1 bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-800 text-white"
                         >
-                            {isSubmitting ? 'กำลังบันทึก...' : 'Save'}
+                            {isLoading ? 'กำลังบันทึก...' : 'Save'}
                         </Button>
                     </div>
                 </div>

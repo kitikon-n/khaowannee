@@ -62,7 +62,7 @@ export default function PortfolioList({ portfolios, onDelete }) {
                                         <Wallet className="h-5 w-5 text-amber-700 dark:text-amber-400" />
                                     </div>
                                     <div>
-                                        <h3 className="text-base font-bold text-stone-800 dark:text-stone-100">{portfolio.name}</h3><span className="text-sm dark:text-stone-300">{portfolio.asset}</span>
+                                        <h3 className="text-base font-bold text-stone-800 dark:text-stone-100">{portfolio.name}</h3><span className="text-sm dark:text-stone-300">{portfolio.asset_name}</span>
                                         {/* <p className="text-sm text-stone-600">{portfolio.description}</p> */}
                                     </div>
                                 </div>
@@ -111,7 +111,7 @@ export default function PortfolioList({ portfolios, onDelete }) {
                                     <Wallet className="h-6 w-6 text-amber-700 dark:text-amber-400" />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-bold text-stone-800 dark:text-stone-100">{portfolio.name}</h3><span className="text-sm dark:text-stone-300">{portfolio.asset}</span>
+                                    <h3 className="text-lg font-bold text-stone-800 dark:text-stone-100">{portfolio.name}</h3><span className="text-sm dark:text-stone-300">{portfolio.asset_name}</span>
                                     {/* <p className="text-sm text-stone-600">{portfolio.description}</p> */}
                                 </div>
                             </div>
