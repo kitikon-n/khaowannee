@@ -130,19 +130,19 @@ export default function PortfolioList({ portfolios, onDelete }) {
                                 <div className="text-right">
                                     <p className="text-sm text-stone-600 dark:text-stone-400">มูลค่ารวม</p>
                                     <p className="text-lg font-bold text-stone-800 dark:text-stone-100">
-                                        ${(portfolio.total_invested * portfolio.total_invested).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                        {(portfolio.current_value).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                     </p>
                                 </div>
 
                                 <div className="text-right">
                                     <p className="text-sm text-stone-600 dark:text-stone-400">การเปลี่ยนแปลง</p>
-                                    <div className={`flex items-center gap-1 ${portfolio.change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                        {portfolio.change >= 0 ? (
+                                    <div className={`flex items-center gap-1 ${portfolio.profit_loss >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                        {portfolio.profit_loss >= 0 ? (
                                             <TrendingUp className="h-4 w-4" />
                                         ) : (
                                             <TrendingDown className="h-4 w-4" />
                                         )}
-                                        <span className="font-semibold">{portfolio.change > 0 ? '+' : ''}{portfolio.change}%</span>
+                                        <span className="font-semibold">{portfolio.profit_loss > 0 ? '+' : ''}{portfolio.profit_loss}</span>
                                     </div>
                                 </div>
 

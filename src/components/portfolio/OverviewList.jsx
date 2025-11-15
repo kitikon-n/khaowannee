@@ -1,123 +1,100 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import AssetAnalysis from './AssetAnalysis';
+import { portfolioService } from '@/services/portfolioService';
+import { showToast } from '../share/toast';
 
 export default function OverviewList({ overview }) {
+    const [selectedAsset, setSelectedAsset] = useState(null);
+    const [recommendationData, setRecommendationData] = useState(null);
+    const [isLoadingRecommendation, setIsLoadingRecommendation] = useState(false);
     // Hardcoded data for now
-    const hardcodedAssets = [
-        {
-            symbol: 'XRP',
-            currentPrice: 868.80,
-            quantity: 345.661734,
-            totalInvested: 171.51,
-            profitLoss: 171.51,
-            profitLossType: 'profit' // profit or loss
-        },
-        {
-            symbol: 'SHIB',
-            currentPrice: 80.95,
-            quantity: 5000283,
-            totalInvested: 8.43,
-            profitLoss: 8.43,
-            profitLossType: 'loss'
-        },
-        {
-            symbol: 'DOGE',
-            currentPrice: 54.19,
-            quantity: 204.9,
-            totalInvested: 8.08,
-            profitLoss: 8.08,
-            profitLossType: 'loss'
-        },
-        {
-            symbol: 'VTHO',
-            currentPrice: 31.59,
-            quantity: 6422,
-            totalInvested: 7.92,
-            profitLoss: 7.92,
-            profitLossType: 'loss'
-        },
-        {
-            symbol: 'LCX',
-            currentPrice: 27.12,
-            quantity: 136.2,
-            totalInvested: 17.23,
-            profitLoss: 17.23,
-            profitLossType: 'loss'
-        },
-        {
-            symbol: 'XLM',
-            currentPrice: 17.56,
-            quantity: 51.643945,
-            totalInvested: 7.72,
-            profitLoss: 7.72,
-            profitLossType: 'loss'
-        },
-        {
-            symbol: 'PEPE',
-            currentPrice: 10.23,
-            quantity: 1000209,
-            totalInvested: 10.13,
-            profitLoss: 10.13,
-            profitLossType: 'loss'
-        },
-        {
-            symbol: 'FLOKI',
-            currentPrice: 9.89,
-            quantity: 100161,
-            totalInvested: 12.78,
-            profitLoss: 12.78,
-            profitLossType: 'loss'
-        }
-    ];
+    const hardcodedAssets = [];
 
     const assets = overview && overview.length > 0 ? overview : hardcodedAssets;
 
-    return (
-        <div className="space-y-0">
-            {assets.map((asset, index) => (
-                <div
-                    key={index}
-                    className="flex items-center justify-between p-4 border-b border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors"
-                >
-                    {/* Left Side: Icon, Symbol, and Price */}
-                    <div className="flex items-center gap-3 flex-1">
-                        {/* Icon with first letter */}
-                        <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                            <span className="text-lg font-bold text-amber-700 dark:text-amber-400">
-                                {asset.symbol.charAt(0)}
-                            </span>
-                        </div>
+    // Auto-select first asset when assets are loaded
+    useEffect(() => {
+        if (assets.length > 0 && !selectedAsset) {
+            handleAssetClick(assets[0]);
+        }
+    }, [assets]);
 
-                        {/* Symbol and Price */}
-                        <div>
-                            <p className="font-bold text-stone-800 dark:text-stone-100">
+    const handleAssetClick = async (asset) => {
+        // Toggle selection
+        if (selectedAsset?.symbol === asset.symbol) {
+            setSelectedAsset(null);
+            setRecommendationData(null);
+            return;
+        }
+
+        setSelectedAsset(asset);
+
+        // Load recommendation data if asset has cryptocurrency_id
+        if (asset.cryptocurrency_id) {
+            setIsLoadingRecommendation(true);
+            try {
+                const result = await portfolioService.getInvestmentRecommendation(asset.cryptocurrency_id);
+                if (result.success) {
+                    setRecommendationData(result.data);
+                }
+            } catch (error) {
+                showToast.error('ไม่สามารถโหลดข้อมูลคำแนะนำการลงทุนได้');
+                setRecommendationData(null);
+            } finally {
+                setIsLoadingRecommendation(false);
+            }
+        }
+    };
+
+    return (
+        <div>
+            {/* Horizontal Scrollable Asset Cards */}
+            <div className="overflow-x-auto pb-4 -mx-2 px-2 scrollbar-hide">
+                <div className="flex gap-3 min-w-max">
+                    {assets.map((asset, index) => (
+                        <div
+                            key={index}
+                            onClick={() => handleAssetClick(asset)}
+                            className={`flex-shrink-0 flex items-center gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                                selectedAsset?.symbol === asset.symbol
+                                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 shadow-md'
+                                    : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 hover:bg-stone-50 dark:hover:bg-stone-800/80'
+                            }`}
+                        >
+                            {/* Icon */}
+                            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                                <span className="text-base font-bold text-amber-700 dark:text-amber-400">
+                                    {asset.symbol.charAt(0)}
+                                </span>
+                            </div>
+
+                            {/* Symbol */}
+                            <p className="font-bold text-stone-800 dark:text-stone-100 min-w-[60px]">
                                 {asset.symbol}
                             </p>
-                            <p className="text-sm text-stone-600 dark:text-stone-400">
-                                ${asset.currentPrice.toFixed(2)}
-                            </p>
-                        </div>
-                    </div>
 
-                    {/* Right Side: Current Price and Total */}
-                    <div className="text-right">
-                        <p className="font-bold text-stone-800 dark:text-stone-100">
-                            {asset.quantity.toLocaleString('en-US', {
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 6
-                            })}
-                        </p>
-                        <div className="flex items-center gap-1 justify-end">
-                            <span className={`text-sm ${asset.unrealizedGain > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                {asset.unrealizedGain < 0 ? '↓' : '↑'}
-                            </span>
-                            <span className={`text-sm ${asset.unrealizedGain > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                ${Number(asset.unrealizedGain).toFixed(2)}
-                            </span>
-                            <span className="text-xs text-stone-500 dark:text-stone-400">All</span>
+                            {/* Profit/Loss */}
+                            <div className="flex items-center gap-1">
+                                <span className={`text-base font-bold ${asset.unrealizedGain > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    {asset.unrealizedGain < 0 ? '↓' : '↑'}
+                                </span>
+                                <span className={`text-base font-bold ${asset.unrealizedGain > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    ${Math.abs(Number(asset.unrealizedGain)).toFixed(2)}
+                                </span>
+                            </div>
                         </div>
-                    </div>
+                    ))}
                 </div>
-            ))}
+            </div>
+
+            {/* Asset Analysis Section */}
+            {selectedAsset && (
+                <AssetAnalysis
+                    asset={selectedAsset}
+                    recommendationData={recommendationData}
+                    isLoading={isLoadingRecommendation}
+                />
+            )}
         </div>
     );
 }
